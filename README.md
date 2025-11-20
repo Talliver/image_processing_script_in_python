@@ -79,12 +79,3 @@ From the `imageprocessing` folder (adjust path to `main.py` if running from else
 ```bash
 python3 main.py -i tests/example.jpg -o out/example_out.jpg -f "sharpen" -v
 ```
-
-## Notes & next steps
-
-- `main.py` is the recommended entrypoint for CLI use — it calls `read.load_image`, `process.apply_filters`, and `write.save_image` with safe defaults and backup behavior.
-- If you want, I can also add a `--batch` mode to `main.py` to process entire directories directly (so you don't need external loops), or add a `--config` option to load filter chains from YAML/JSON.
-
----
-
-File: `README.md` updated to show CLI-first usage for `main.py`.
