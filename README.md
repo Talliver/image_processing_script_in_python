@@ -1,86 +1,90 @@
-# imageprocessing — Quick examples
+# imageprocessing — CLI examples
 
-This README gives short, copy-pastable examples showing how to use the `imageprocessing` helper modules in this folder (`read.py`, `process.py`, `write.py`, and `main.py`). Replace the placeholder `Image` type with whatever your project uses (e.g. `PIL.Image.Image` or a NumPy array).
+This README shows how to use the project's CLI wrapper (`main.py`) to run the imageprocessing pipeline from the command line. Examples below use `python3 main.py` from the `imageprocessing` folder root.
 
-**Example Functions**
+The CLI (see `main.py`) supports these common flags (summary):
 
-- **read_image:** `read_image(path: str) -> Image` : Read an image from disk and return an image object/array.
-- **read_image_bytes:** `read_image_bytes(data: bytes) -> Image` : Load an image from raw bytes (HTTP uploads, in-memory pipelines).
-- **get_image_metadata:** `get_image_metadata(path: str) -> dict` : Extract basic metadata (size, mode, format) without loading full pixels.
-- **resize_image:** `resize_image(img: Image, size: tuple[int,int], resample: str='bilinear') -> Image` : Resize to `(width, height)`.
-- **crop_image:** `crop_image(img: Image, box: tuple[int,int,int,int]) -> Image` : Crop to `(left, top, right, bottom)`.
-- **convert_to_grayscale:** `convert_to_grayscale(img: Image) -> Image` : Convert to grayscale.
-- **adjust_contrast:** `adjust_contrast(img: Image, factor: float) -> Image` : Change contrast; `1.0` = no change.
-- **apply_threshold:** `apply_threshold(img: Image, threshold: int) -> Image` : Binary mask from threshold (0-255).
-- **detect_edges:** `detect_edges(img: Image, method: str='sobel') -> Image` : Return an edge map.
-- **annotate_image:** `annotate_image(img: Image, annotations: list[dict]) -> Image` : Draw boxes/text given annotation specs.
-- **write_image:** `write_image(img: Image, path: str, format: str|None=None, quality: int|None=None) -> None` : Save to disk.
-- **write_image_bytes:** `write_image_bytes(img: Image, format: str='PNG') -> bytes` : Return encoded image bytes.
-- **pipeline_process_and_save:** `pipeline_process_and_save(src_path: str, dst_path: str, ops: list[Callable]) -> None` : Read, apply ops, write result.
-- **batch_process_directory:** `batch_process_directory(input_dir: str, output_dir: str, op: Callable, recursive: bool=False) -> dict` : Apply `op` to all images; return report.
+- `-i, --input` : Input image path (optional — auto-detect in cwd if omitted)
+- `-o, --output` : Output image path (default `output_image.jpg`)
+- `-f, --filter` : Filter(s) to apply. Can be repeated or comma-separated.
+- `--overwrite` : Allow overwriting existing output.
+- `--no-backup` : Do not backup existing output file.
+- `--dry-run` : Print planned actions without writing files.
+- `-v, --verbose` : Verbose output.
+- `--format` : Force output format (JPEG, PNG, WEBP, ...)
+- `--quality` : Quality for lossy formats (JPEG/WEBP).
+- `--optimize`, `--progressive`, `--png-compress-level`, `--png-optimize`, `--webp-quality`, `--webp-lossless`, `--dpi` : Additional output controls.
 
-**Usage Snippets**
+## Single-file pipeline
 
-- Single-file pipeline
-
-```python
-# If the imageprocessing folder is on PYTHONPATH or installed as a package:
-from imageprocessing.read import read_image
-from imageprocessing.process import resize_image, convert_to_grayscale
-from imageprocessing.write import write_image
-
-img = read_image("input.jpg")
-img = resize_image(img, (800, 600))
-img = convert_to_grayscale(img)
-write_image(img, "output.png", format="PNG")
-```
-
-- In-memory web upload (bytes -> process -> bytes)
-
-```python
-from imageprocessing.read import read_image_bytes
-from imageprocessing.process import apply_threshold
-from imageprocessing.write import write_image_bytes
-
-# `upload_bytes` could come from a Flask/Django request.files read() call
-img = read_image_bytes(upload_bytes)
-img = apply_threshold(img, 128)
-out_bytes = write_image_bytes(img, format="JPEG")
-```
-
-- Batch convert + watermark (conceptual)
-
-```python
-from imageprocessing.write import write_image
-from imageprocessing.read import read_image
-from imageprocessing.process import annotate_image
-from imageprocessing.process import batch_process_directory
-
-def add_watermark(img):
-    return annotate_image(img, [{"text": "© Me", "pos": (10, 10), "color": "white"}])
-
-stats = batch_process_directory("photos/", "photos_out/", add_watermark, recursive=True)
-print(stats)
-```
-
-**Imports / package notes**
-
-- When running scripts from inside this folder, you may import as `from read import read_image` (local import).
-- When the folder is used as a package (added to `PYTHONPATH` or installed), prefer `from imageprocessing.read import read_image`.
-
-**Quick try**
-
-Run a simple example from the folder root (adjust import style if necessary):
+Apply default filters and write output (auto-detect input if omitted):
 
 ```bash
-python -c "from read import read_image; from write import write_image; img=read_image('input.jpg'); write_image(img,'out.png')"
+python3 main.py
 ```
 
-**Next steps**
+Specify input, output, and filters (example forces quality):
 
-- I can implement these helper stubs directly into `read.py`, `process.py`, and `write.py` if you want runnable helpers.
-- I can also add tests or example images to try the snippets.
+```bash
+python3 main.py -i in.jpg -o out.png -f sepia -f "unsharp:1.2,2" --quality 85
+```
+
+Dry-run with verbose output to see what will happen:
+
+```bash
+python3 main.py -i in.jpg -o out.png -f grayscale --dry-run -v
+```
+
+Force output format and optimization flags:
+
+```bash
+python3 main.py -i photo.heic -o photo.jpg --format JPEG --quality 90 --optimize --progressive
+```
+
+## Batch processing (shell examples)
+
+`main.py` processes a single image per invocation. Use shell loops or `find`/`xargs` to process many files.
+
+Simple bash loop (preserves filenames):
+
+```bash
+mkdir -p out
+for f in photos/*.{jpg,png}; do
+    outfile="out/$(basename "${f%.*}").jpg"
+    python3 main.py -i "$f" -o "$outfile" -f "resize:800x600" --quality 80
+done
+```
+
+Using `find` + `xargs` (parallelizable):
+
+```bash
+mkdir -p out
+find photos -type f \( -iname '*.jpg' -o -iname '*.png' \) -print0 \
+    | xargs -0 -n1 -P4 -I{} bash -c 'outfile="out/$(basename "${1%.*}").jpg"; python3 main.py -i "$1" -o "$outfile" -f "grayscale" --quality 75' -- {}
+```
+
+## Auto-detect input
+
+If you omit `-i/--input`, `main.py` will try to auto-detect a suitable input image in the current working directory (see `main.py` docstring).
+
+```bash
+# Run auto-detect + default filters
+python3 main.py -o result.png
+```
+
+## Quick try (one-liner)
+
+From the `imageprocessing` folder (adjust path to `main.py` if running from elsewhere):
+
+```bash
+python3 main.py -i tests/example.jpg -o out/example_out.jpg -f "sharpen" -v
+```
+
+## Notes & next steps
+
+- `main.py` is the recommended entrypoint for CLI use — it calls `read.load_image`, `process.apply_filters`, and `write.save_image` with safe defaults and backup behavior.
+- If you want, I can also add a `--batch` mode to `main.py` to process entire directories directly (so you don't need external loops), or add a `--config` option to load filter chains from YAML/JSON.
 
 ---
 
-File: `README.md` for the `imageprocessing` folder — concise examples to get started.
+File: `README.md` updated to show CLI-first usage for `main.py`.
